@@ -1,0 +1,473 @@
+{
+ "cells": [
+  {
+   "cell_type": "markdown",
+   "id": "0",
+   "metadata": {},
+   "source": [
+    "# HyperDrone\n",
+    "\n",
+    "[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/rl-tools/rl-tools/blob/main/docs/hyperdrone/src/HyperDrone.ipynb)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "1",
+   "metadata": {
+    "tags": [
+     "remove-output"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "%pip install -q \"hyperdrone[examples]\" foundation-policy==1.0.1"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "4",
+   "metadata": {
+    "tags": [
+     "hide-input"
+    ],
+    "jupyter": {
+     "source_hidden": true
+    },
+    "mystnb": {
+     "code_prompt_show": "Show imports and helpers",
+     "code_prompt_hide": "Hide imports and helpers"
+    }
+   },
+   "outputs": [],
+   "source": [
+    "from itertools import cycle\n",
+    "from contextlib import closing\n",
+    "from dataclasses import replace\n",
+    "from pathlib import Path\n",
+    "\n",
+    "import imageio.v2 as imageio\n",
+    "import matplotlib\n",
+    "import numpy as np\n",
+    "from foundation_policy import Raptor\n",
+    "from IPython.display import Video, display\n",
+    "from scipy.spatial.transform import Rotation\n",
+    "from PIL import Image, ImageDraw, ImageFont, ImageOps\n",
+    "\n",
+    "import hyperlux\n",
+    "from hyperlux.camera import CameraSpec, RGB, Depth, Segmentation, Normals, Flow, FlowStatus\n",
+    "from hyperdrone import Config, HyperDrone\n",
+    "from hyperdrone.examples.data import rigged_model_path\n",
+    "from hyperdrone.examples.shots import HYPERDRONE_SHOTS as shots\n",
+    "\n",
+    "hyperlux.set_verbosity(\"warning\")\n",
+    "\n",
+    "\n",
+    "FONT = ImageFont.truetype(str(Path(matplotlib.get_data_path()) / \"fonts/ttf/DejaVuSans.ttf\"), 16)\n",
+    "\n",
+    "\n",
+    "def rgb(image):\n",
+    "    return image if image.dtype == np.uint8 else (np.clip(image, 0, 1) * 255).astype(np.uint8)\n",
+    "\n",
+    "\n",
+    "def writer(path, fps):\n",
+    "    return imageio.get_writer(str(path), fps=fps, codec=\"libx264\", quality=8, macro_block_size=1)\n",
+    "\n",
+    "\n",
+    "def panel(images, titles):\n",
+    "    images = [rgb(image) for image in images]\n",
+    "    height, width = images[0].shape[:2]\n",
+    "    canvas = Image.new(\"RGB\", (width * len(images), height + 32), \"#111827\")\n",
+    "    draw = ImageDraw.Draw(canvas)\n",
+    "    for i, (image, title) in enumerate(zip(images, titles)):\n",
+    "        canvas.paste(Image.fromarray(image), (i * width, 32))\n",
+    "        draw.text((i * width + 12, 6), title, font=FONT, fill=\"#e5e7eb\")\n",
+    "    return np.asarray(canvas)\n",
+    "\n",
+    "\n",
+    "def sensor_panel(depth, labels, normals, flow, status):\n",
+    "    depth_image = matplotlib.colormaps[\"viridis\"](np.clip(depth / 10, 0, 1))[..., :3]\n",
+    "    depth_image[labels == 0xFFFFFFFF] = 0\n",
+    "    label_image = matplotlib.colormaps[\"tab20\"](labels % 20)[..., :3]\n",
+    "    label_image[labels == 0xFFFFFFFF] = 0\n",
+    "    normal_image = np.clip(normals * 0.5 + 0.5, 0, 1)\n",
+    "    normal_image[np.all(normals == 0, axis=-1)] = 0\n",
+    "    flow_image = matplotlib.colormaps[\"magma\"](np.clip(np.linalg.norm(flow, axis=-1) / 50, 0, 1))[..., :3]\n",
+    "    flow_image[status != hyperlux.FlowStatus.VALID] = 0\n",
+    "    images = [np.asarray(Image.fromarray(rgb(image)).resize((WIDTH // 2, HEIGHT // 2), Image.Resampling.NEAREST))\n",
+    "              for image in (depth_image, label_image, normal_image, flow_image)]\n",
+    "    return panel(images, [\"FPV depth | 0-10 m\", \"FPV semantic IDs\",\n",
+    "                          \"FPV world normals\", \"FPV flow | 0-50 px\"])\n",
+    "\n",
+    "\n",
+    "def join(paths, output, fps):\n",
+    "    with imageio.get_reader(str(paths[0])) as first:\n",
+    "        size = first.get_meta_data()[\"size\"]\n",
+    "    with writer(output, fps) as out:\n",
+    "        for path in paths:\n",
+    "            with imageio.get_reader(str(path)) as source:\n",
+    "                for frame in source:\n",
+    "                    out.append_data(np.asarray(ImageOps.pad(Image.fromarray(frame), size, color=\"#111827\")))\n",
+    "\n",
+    "\n",
+    "def show_video(path):\n",
+    "    display(Video(str(path), embed=True, width=768, html_attributes='controls loop style=\"max-width: 100%; height: auto;\"'))\n",
+    "\n",
+    "\n",
+    "def camera(position, pitch, yaw, fov):\n",
+    "    orientation = Rotation.from_euler(\"ZY\", [yaw, pitch]).as_quat()[[3, 0, 1, 2]].tolist()\n",
+    "    return {\"fov\": fov, \"mount\": {\"pose\": {\"position\": position, \"orientation\": orientation}}}\n",
+    "\n",
+    "\n",
+    "def block(state, layout, name):\n",
+    "    offset, size = layout.blocks[name]\n",
+    "    return state[:, offset:offset + size]\n",
+    "\n",
+    "def pilots(env):\n",
+    "    policies = [Raptor() for _ in range(env.total_instances * env.num_agents)]\n",
+    "    for policy in policies:\n",
+    "        policy.reset()\n",
+    "    return policies, np.zeros((env.total_instances, env.action_dim), dtype=np.float32)\n",
+    "\n",
+    "def act(env, policies, previous, target=0, layout=None):\n",
+    "    layout = env.observation_layout_privileged if layout is None else layout\n",
+    "    state = env.observe_privileged().reshape(env.total_instances * env.num_agents, -1)\n",
+    "    prefix = \"agent0/\" if env.num_agents > 1 else \"\"\n",
+    "    observation = np.concatenate([\n",
+    "        block(state, layout, prefix + \"position\") - target,\n",
+    "        *[block(state, layout, prefix + name) for name in\n",
+    "          (\"orientation_rotation_matrix\", \"linear_velocity\", \"angular_velocity\")],\n",
+    "        previous.reshape(len(policies), -1),\n",
+    "    ], axis=1)\n",
+    "    return np.concatenate([policy.evaluate_step(row[None]) for policy, row in zip(policies, observation)]).astype(np.float32).reshape(env.total_instances, env.action_dim)\n"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "2",
+   "metadata": {},
+   "source": [
+    "## Setup"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "3",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "dataset = hyperlux.datasets.procthor.Train200()\n",
+    "scenes = [dataset[index].reference for index in (1, 0)]\n",
+    "WIDTH, HEIGHT = 640, 360\n",
+    "STEPS, STRIDE, FPS = 500, 4, 25\n",
+    "output = Path(\"hyperdrone_videos\")\n",
+    "output.mkdir(exist_ok=True)\n",
+    "drone_asset = rigged_model_path(\"x500\")\n",
+    "config = Config(instances_per_world=1, width=WIDTH, height=HEIGHT, preset=\"x500_fpv\", motion_blur_samples=8)\n",
+    "initial = {\"mdp\": {\"init\": {\n",
+    "    \"guidance\": 0.0, \"max_position\": 0.25, \"max_angle\": 0.1,\n",
+    "    \"max_linear_velocity\": 0.0, \"max_angular_velocity\": 0.0,\n",
+    "    \"min_rpm\": 0.0, \"max_rpm\": 0.0,\n",
+    "}}}\n",
+    "\n",
+    "fpv = camera([0.1, 0, 0.19], 0.3, 0, 100)\n",
+    "chase = camera([-0.8, -0.8, 0.6], 0.45, np.pi / 4, 65)"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "6",
+   "metadata": {},
+   "source": [
+    "## Fly the preset"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "7",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "sensor_config = replace(config, dataset=\"procthor\", cameras=(CameraSpec(\"front\", (RGB(\"float32\"), Depth(), Segmentation(labels=\"semantic\"), Normals(), Flow(), FlowStatus())), CameraSpec(\"chase\", (RGB(\"float32\"),))))\n",
+    "with closing(HyperDrone(scenes, config=sensor_config, drone_asset=drone_asset,\n",
+    "                              parameters={\"dynamics\": initial, \"cameras\": {\"front\": fpv, \"chase\": chase}})) as env:\n",
+    "    print(\"Rendering backend:\", env.render_backend)\n",
+    "    env.reset(spawn_points=shots[\"flight\"])\n",
+    "    env.observe()\n",
+    "    semantic_classes = env.segmentation_classes\n",
+    "    semantic_ids = env.outputs[Segmentation(labels=\"semantic\")].read()[0, 0]\n",
+    "    print(\"Visible semantic IDs:\", {int(id): semantic_classes[int(id)]\n",
+    "                                    for id in np.unique(semantic_ids) if id != 0xFFFFFFFF})\n",
+    "    base_layout = env.observation_layout_privileged\n",
+    "    image_layout = env.observation_layout\n",
+    "    policies, previous = pilots(env)\n",
+    "    assert np.isclose(STRIDE * env.dt, 1 / FPS)\n",
+    "    with writer(output / \"01-preset.mp4\", FPS) as video:\n",
+    "        for step in range(STEPS):\n",
+    "            target = np.array([0.25 if step >= 200 else 0, 0, 0], dtype=np.float32)\n",
+    "            previous = act(env, policies, previous, target)\n",
+    "            env.step(previous)\n",
+    "            if (step + 1) % STRIDE == 0:\n",
+    "                env.render()\n",
+    "                frames = env.outputs[RGB(\"float32\")].read()[0]\n",
+    "                views = panel(frames,\n",
+    "                              [\"1 / Fly the preset - FPV\", \"Same flight - chase camera\"])\n",
+    "                sensors = sensor_panel(env.outputs[Depth()].read()[0, 0], env.outputs[Segmentation(labels=\"semantic\")].read()[0, 0],\n",
+    "                                       env.outputs[Normals()].read()[0, 0], env.outputs[Flow()].read()[0, 0], env.outputs[FlowStatus()].read()[0, 0])\n",
+    "                video.append_data(np.concatenate([views, sensors], axis=0))\n",
+    "\n",
+    "show_video(output / \"01-preset.mp4\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "8",
+   "metadata": {},
+   "source": [
+    "## Multiple drone models"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "9",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "fpv_positions = {\n",
+    "    \"x500\": [0.1, 0, 0.19],\n",
+    "    \"arpl\": [0.08, 0, 0.08],\n",
+    "    \"soft\": [0.1, 0, 0.105],\n",
+    "    \"crazyflie_brushless\": [0.016, 0, 0.026],\n",
+    "    \"crazyflie\": [0.012, 0, 0.022],\n",
+    "    \"savagebee_pusher\": [0.035, 0, 0.035],\n",
+    "}\n",
+    "names = list(fpv_positions)\n",
+    "drones = [{\"asset\": rigged_model_path(name), \"parameters\": {\n",
+    "    \"dynamics\": {\"dynamics\": {\"model\": name}}, \"cameras\": {\"front\": camera(fpv_positions[name], 0.3, 0, 100)},\n",
+    "}} for name in names]\n",
+    "group_config = replace(config, num_agents=len(names) + 1, num_camera_agents=len(names) + 1)\n",
+    "with closing(HyperDrone(scenes, config=group_config, drones=drones,\n",
+    "                              parameters={\"dynamics\": initial})) as mixed:\n",
+    "    mixed.reset(spawn_points=shots[\"models\"])\n",
+    "    mixed.set_instance_parameters({\"agents\": [\n",
+    "        {\"cameras\": {\"front\": camera([0.4, 0, 0.12], 0.35, 0, 90)}}, *[{} for _ in names],\n",
+    "    ]})\n",
+    "    anchors = np.array(shots[\"models\"][0][\"poses\"], dtype=np.float32)[:, :3]\n",
+    "    policies, previous = pilots(mixed)\n",
+    "    with writer(output / \"02-models.mp4\", FPS) as video:\n",
+    "        for step in range(STEPS):\n",
+    "            targets = anchors.copy()\n",
+    "            targets[1:, 2] += 0.12 * np.sin(2 * np.pi * step * mixed.dt / 4 + np.arange(len(names)))\n",
+    "            previous = act(mixed, policies, previous, targets)\n",
+    "            mixed.step(previous)\n",
+    "            if (step + 1) % STRIDE == 0:\n",
+    "                filming_view = mixed.frames().reshape(1, mixed.num_views, HEIGHT, WIDTH, 3)[0, 0]\n",
+    "                video.append_data(panel([filming_view], [\"Six drone models | filmed by a seventh drone\"]))\n",
+    "show_video(output / \"02-models.mp4\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "10",
+   "metadata": {},
+   "source": [
+    "## Target-frame task"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "11",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with closing(HyperDrone(scenes, config=replace(config, task=\"target_frame\"),\n",
+    "                              drone_asset=drone_asset, parameters={\"dynamics\": initial, \"cameras\": {\"front\": fpv}})) as task:\n",
+    "    print(\"preset:\", image_layout.blocks, \"target_frame:\", task.observation_layout.blocks)\n",
+    "    task.reset(spawn_points=shots[\"flight\"])\n",
+    "    task.observe()\n",
+    "    target_offset, target_size = task.observation_layout.blocks[\"target_image\"]\n",
+    "    target_image = task.frames()[0, ..., target_offset:target_offset + target_size].copy()\n",
+    "    policies, previous = pilots(task)\n",
+    "    with writer(output / \"03-target.mp4\", FPS) as video:\n",
+    "        for step in range(STEPS):\n",
+    "            previous = act(task, policies, previous)\n",
+    "            task.step(previous)\n",
+    "            if (step + 1) % STRIDE == 0:\n",
+    "                frame = task.frames()[0]\n",
+    "                images = [frame[..., offset:offset + size] for offset, size in task.observation_layout.blocks.values()]\n",
+    "                np.testing.assert_array_equal(images[1], target_image)\n",
+    "                video.append_data(panel(images, [\"2 / Current image - returning to the goal\", \"Target image - fixed this episode\"]))\n",
+    "show_video(output / \"03-target.mp4\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "12",
+   "metadata": {},
+   "source": [
+    "## Python task"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "13",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with closing(HyperDrone(scenes, config=replace(config, instances_per_world=2), drone_asset=drone_asset,\n",
+    "                              parameters={\"dynamics\": initial, \"cameras\": {\"front\": fpv}})) as env:\n",
+    "    spawn_cycles = [[cycle(starts) for starts in room] for room in shots[\"python_task\"]]\n",
+    "    room = 0\n",
+    "    env.reset(spawn_points=[next(starts) for starts in spawn_cycles[room]])\n",
+    "    policies, previous = pilots(env)\n",
+    "    targets = np.array([[0.2, 0, 0], [-0.2, 0, 0]], dtype=np.float32)\n",
+    "    age, episodes = np.zeros(2, dtype=int), np.zeros(2, dtype=int)\n",
+    "    last_reset = np.full(2, -100)\n",
+    "    with writer(output / \"04-python-task.mp4\", FPS) as video:\n",
+    "        for step in range(800):\n",
+    "            previous = act(env, policies, previous, targets)\n",
+    "            env.step(previous)\n",
+    "            state = env.observe_privileged()\n",
+    "            distance = np.linalg.norm(block(state, base_layout, \"position\") - targets, axis=1)\n",
+    "            speed = np.linalg.norm(block(state, base_layout, \"linear_velocity\"), axis=1)\n",
+    "            reward = -distance - 0.1 * speed\n",
+    "            age += 1\n",
+    "            terminated = ((distance < 0.04) & (speed < 0.15) & (age >= 100)) | (distance > 1.0)\n",
+    "            reset = terminated | (age >= [250, 350])\n",
+    "            if step == 399:\n",
+    "                env.rotate_scene()\n",
+    "                room = 1\n",
+    "                reset[:] = True\n",
+    "            env.reset(reset, spawn_points=[next(spawn_cycles[room][i]) for i in np.flatnonzero(reset)])\n",
+    "            for i in np.flatnonzero(reset):\n",
+    "                policies[i].reset()\n",
+    "                previous[i] = 0\n",
+    "                age[i] = 0\n",
+    "                episodes[i] += 1\n",
+    "                targets[i] *= -1\n",
+    "                last_reset[i] = step\n",
+    "            if (step + 1) % STRIDE == 0:\n",
+    "                env.observe()\n",
+    "                titles = [f\"3 / Instance {i} | episode {episodes[i]} | \" +\n",
+    "                          (\"RESET\" if step - last_reset[i] < 20 else f\"reward {reward[i]:.2f} | error {distance[i]:.2f} m\")\n",
+    "                          for i in range(2)]\n",
+    "                video.append_data(panel(env.frames(), titles))\n",
+    "    print(\"completed episodes:\", episodes.tolist())\n",
+    "show_video(output / \"04-python-task.mp4\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "14",
+   "metadata": {},
+   "source": [
+    "## Custom C++ world"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "15",
+   "metadata": {
+    "tags": [
+     "remove-output"
+    ]
+   },
+   "outputs": [],
+   "source": [
+    "%%writefile my_world.h\n",
+    "#pragma once\n",
+    "#include <rl_tools/rl/environments/hyperdrone/presets.h>\n",
+    "#include <cstddef>\n",
+    "\n",
+    "namespace hyperdrone_user {\n",
+    "    struct SPEC: rl_tools::rl::environments::hyperdrone::presets::X500FPV<float, std::size_t> {\n",
+    "        static constexpr std::size_t N_CAMERA_AGENTS = 1;\n",
+    "        static constexpr std::size_t INSTANCES_PER_WORLD = 1;\n",
+    "        static constexpr std::size_t CAM_WIDTH = 640;\n",
+    "        static constexpr std::size_t CAM_HEIGHT = 360;\n",
+    "        using SHADING = rl_tools::hyperlux::VeryHigh;\n",
+    "        static constexpr bool ENABLE_MOTION_BLUR = true;\n",
+    "        static constexpr std::size_t MOTION_BLUR_SAMPLES = 8;\n",
+    "        static constexpr bool ENABLE_ANTI_ALIASING = true;\n",
+    "        static constexpr std::size_t ANTI_ALIASING_GRID_SIZE = 2;\n",
+    "    };\n",
+    "    using WORLD = rl_tools::rl::environments::hyperdrone::World<SPEC>;\n",
+    "}"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "16",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "with closing(HyperDrone(scenes, config=Config(spec_header=\"my_world.h\"),\n",
+    "                              drone_asset=drone_asset, parameters={\"dynamics\": initial, \"cameras\": {\"camera0\": chase}})) as custom:\n",
+    "    custom.reset(spawn_points=shots[\"flight\"])\n",
+    "    policies, previous = pilots(custom)\n",
+    "    with writer(output / \"05-custom-world.mp4\", FPS) as video:\n",
+    "        for step in range(STEPS):\n",
+    "            target = np.array([0.25 if step >= 200 else 0, 0, 0], dtype=np.float32)\n",
+    "            previous = act(custom, policies, previous, target, layout=base_layout)\n",
+    "            custom.step(previous)\n",
+    "            if (step + 1) % STRIDE == 0:\n",
+    "                views = custom.observe().reshape(custom.total_instances, HEIGHT, WIDTH, custom.image_channels)\n",
+    "                video.append_data(panel([views[0]], [\"4 / Custom C++ world\"]))\n",
+    "\n",
+    "show_video(output / \"05-custom-world.mp4\")"
+   ]
+  },
+  {
+   "cell_type": "markdown",
+   "id": "17",
+   "metadata": {},
+   "source": [
+    "## Combined video"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "id": "18",
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "clips = [output / name for name in (\"01-preset.mp4\", \"02-models.mp4\", \"03-target.mp4\",\n",
+    "                                   \"04-python-task.mp4\", \"05-custom-world.mp4\")]\n",
+    "join(clips, \"hyperdrone.mp4\", FPS)\n",
+    "show_video(\"hyperdrone.mp4\")\n",
+    "print(\"Saved\", Path(\"hyperdrone.mp4\").resolve())"
+   ]
+  }
+ ],
+ "metadata": {
+  "accelerator": "GPU",
+  "kernelspec": {
+   "display_name": ".venv (3.12.3)",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.12.3"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 5
+}
