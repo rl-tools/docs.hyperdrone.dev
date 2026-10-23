@@ -5,18 +5,22 @@
    "id": "0",
    "metadata": {},
    "source": [
-    "# HyperLux Minimal\n",
+    "# HyperLux: Simple Batch\n",
     "\n",
     "Render **1 HSSD scene × 1,024 cameras** at **512×512**. The first run downloads scenes and compiles native code.\n",
     "\n",
-    "With the OptiX backend, camera inputs and rendered frames stay on CUDA. Other backends use CPU tensors."
+    "With the OptiX backend, camera inputs and rendered frames stay resident on the GPU."
    ]
   },
   {
    "cell_type": "code",
    "execution_count": null,
    "id": "1",
-   "metadata": {},
+   "metadata": {
+    "tags": [
+     "remove-output"
+    ]
+   },
    "outputs": [],
    "source": [
     "%pip install -q hyperlux torch matplotlib"
@@ -34,10 +38,10 @@
     "from hyperlux.camera import RGB\n",
     "\n",
     "BATCH_SIZE, SIZE = 1024, 512\n",
-    "config = hyperlux.Config(width=SIZE, height=SIZE, batch_size=BATCH_SIZE, fidelity=\"veryhigh\")\n",
+    "config = hyperlux.Config(width=SIZE, height=SIZE, batch_size=BATCH_SIZE)\n",
     "dataset = hyperlux.datasets.procthor.Train200()\n",
     "renderer = hyperlux.HyperLux(config=config)\n",
-    "scene = hyperlux.load_scene(dataset[0].reference, fidelity=config.fidelity)\n",
+    "scene = hyperlux.load_scene(dataset[0].reference)\n",
     "renderer.init(scene)\n",
     "\n",
     "device = torch.device(\"cuda\" if renderer.backend == \"optix\" else \"cpu\")\n",
@@ -49,7 +53,7 @@
    "id": "3",
    "metadata": {},
    "source": [
-    "Supply camera poses as float32 `(batch, 4, 3)` ray bases: **position, top-left ray, horizontal increment, vertical increment**, in world coordinates (+X forward, +Y left, +Z up). Positions are drawn (`seed=0`) from the scene's free-space annotation table, the probe-scored poses the HyperDrone environment spawns from; cameras use a 90° field of view."
+    "Supply camera poses as float32 `(batch, 4, 3)` ray bases: **position, top-left ray, horizontal increment, vertical increment**, in world coordinates (+X forward, +Y left, +Z up). "
    ]
   },
   {
@@ -94,7 +98,7 @@
    "id": "7",
    "metadata": {},
    "source": [
-    "Preview 64 views in four rows of sixteen; only these previews are copied to the CPU."
+    "Preview 64 views in four rows of sixteen. Only these previews are copied to the CPU."
    ]
   },
   {

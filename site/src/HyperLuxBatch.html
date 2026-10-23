@@ -3,17 +3,18 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="next" title="HyperLux Maximal" href="HyperLuxMaximal.html"><link rel="prev" title="HyperDrone" href="../index.html">
-        <link rel="prefetch" href="../_static/hyperdrone-light.svg" as="image">
-        <link rel="prefetch" href="../_static/hyperdrone-dark.svg" as="image">
+<link rel="index" title="Index" href="../genindex.html"><link rel="search" title="Search" href="../search.html"><link rel="prev" title="HyperLux" href="HyperLux.html">
+        <link rel="prefetch" href="../_static/hyperdrone.svg" as="image">
+        <link rel="prefetch" href="../_static/hyperdrone.svg" as="image">
 
     <!-- Generated with Sphinx 9.1.1 and Furo 2025.12.19 -->
-        <title>HyperLux Minimal - HyperDrone documentation</title>
+        <title>HyperLux: Simple Batch - HyperDrone documentation</title>
       <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css" />
     <link rel="stylesheet" type="text/css" href="../_static/shiki.css?v=37b455bf" />
     <link rel="stylesheet" type="text/css" href="../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    <link rel="stylesheet" type="text/css" href="../_static/branding.css?v=5fa042b9" />
     
     
 
@@ -186,8 +187,8 @@
       
       <div class="sidebar-sticky"><a class="sidebar-brand" href="../index.html">
   <div class="sidebar-logo-container">
-    <img class="sidebar-logo only-light" src="../_static/hyperdrone-light.svg" alt="Light Logo"/>
-    <img class="sidebar-logo only-dark" src="../_static/hyperdrone-dark.svg" alt="Dark Logo"/>
+    <img class="sidebar-logo only-light" src="../_static/hyperdrone.svg" alt="Light Logo"/>
+    <img class="sidebar-logo only-dark" src="../_static/hyperdrone.svg" alt="Dark Logo"/>
   </div>
   
   
@@ -198,8 +199,8 @@
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
   <ul class="current">
-<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">HyperLux Minimal</a></li>
-<li class="toctree-l1"><a class="reference internal" href="HyperLuxMaximal.html">HyperLux Maximal</a></li>
+<li class="toctree-l1"><a class="reference internal" href="HyperLux.html">HyperLux</a></li>
+<li class="toctree-l1 current current-page"><a class="current reference internal" href="#">HyperLux: Simple Batch</a></li>
 </ul>
 
 </div>
@@ -220,7 +221,7 @@
         </a>
         <div class="content-icon-container">
           <div class="view-this-page">
-  <a class="muted-link" href="../_sources/src/HyperLuxMinimal.ipynb.txt" title="View this page">
+  <a class="muted-link" href="../_sources/src/HyperLuxBatch.ipynb.txt" title="View this page">
     <svg><use href="#svg-eye"></use></svg>
     <span class="visually-hidden">View this page</span>
   </a>
@@ -238,19 +239,14 @@
           </label>
         </div>
         <article role="main" id="furo-main-content">
-          <section id="hyperlux-minimal">
-<h1>HyperLux Minimal<a class="headerlink" href="#hyperlux-minimal" title="Link to this heading">¶</a></h1>
+          <section id="hyperlux-simple-batch">
+<h1>HyperLux: Simple Batch<a class="headerlink" href="#hyperlux-simple-batch" title="Link to this heading">¶</a></h1>
 <p>Render <strong>1 HSSD scene × 1,024 cameras</strong> at <strong>512×512</strong>. The first run downloads scenes and compiles native code.</p>
-<p>With the OptiX backend, camera inputs and rendered frames stay on CUDA. Other backends use CPU tensors.</p>
-<div class="cell docutils container">
+<p>With the OptiX backend, camera inputs and rendered frames stay resident on the GPU.</p>
+<div class="cell tag_remove-output docutils container">
 <div class="cell_input docutils container">
 <div class="highlight notranslate docutils container">
 <pre class="shiki shiki-themes github-light github-dark" style="--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e" tabindex="0"><code><span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">%</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">pip install </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">-</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">q hyperlux torch matplotlib</span></span></code></pre></div>
-</div>
-<div class="cell_output docutils container">
-<div class="output stream highlight-myst-ansi notranslate"><div class="highlight"><pre><span></span>Note: you may need to restart the kernel to use updated packages.
-</pre></div>
-</div>
 </div>
 </div>
 <div class="cell docutils container">
@@ -261,10 +257,10 @@
 <span class="line"><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">from</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">camera</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">import</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF"> </span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF" class="semantic-class">RGB</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">BATCH_SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">SIZE</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583"> =</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF"> 1024</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">512</span></span>
-<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">config </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-class">Config</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">width</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">height</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">batch_size</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">BATCH_SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">fidelity</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF">"veryhigh"</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">)</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">config </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-class">Config</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">width</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">height</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">batch_size</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">BATCH_SIZE</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">)</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">dataset </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">datasets</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">procthor</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.Train200()</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">renderer </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-class">HyperLux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">config</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">config)</span></span>
-<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">scene </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-function">load_scene</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(dataset[</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">].reference, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">fidelity</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">config.fidelity)</span></span>
+<span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">scene </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">hyperlux</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-function">load_scene</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(dataset[</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">].reference)</span></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">renderer.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-function">init</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(scene)</span></span>
 <span class="line"></span>
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">device </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> </span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-module">torch</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-class">device</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF">"cuda"</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583"> if</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8"> renderer.backend </span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">==</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF"> "optix"</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583"> else</span><span style="--shiki-light:#032F62;--shiki-dark:#9ECBFF"> "cpu"</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">)</span></span>
@@ -278,7 +274,7 @@
 </div>
 </div>
 </div>
-<p>Supply camera poses as float32 <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">4,</span> <span class="pre">3)</span></code> ray bases: <strong>position, top-left ray, horizontal increment, vertical increment</strong>, in world coordinates (+X forward, +Y left, +Z up). Positions are drawn (<code class="docutils literal notranslate"><span class="pre">seed=0</span></code>) from the scene’s free-space annotation table, the probe-scored poses the HyperDrone environment spawns from; cameras use a 90° field of view.</p>
+<p>Supply camera poses as float32 <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">4,</span> <span class="pre">3)</span></code> ray bases: <strong>position, top-left ray, horizontal increment, vertical increment</strong>, in world coordinates (+X forward, +Y left, +Z up).</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight notranslate docutils container">
@@ -311,7 +307,7 @@
 </div>
 </div>
 </div>
-<p>Preview 64 views in four rows of sixteen; only these previews are copied to the CPU.</p>
+<p>Preview 64 views in four rows of sixteen. Only these previews are copied to the CPU.</p>
 <div class="cell docutils container">
 <div class="cell_input docutils container">
 <div class="highlight notranslate docutils container">
@@ -327,7 +323,7 @@
 <span class="line"><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">fig.</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8" class="semantic-function">subplots_adjust</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">(</span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">left</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">right</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">1</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">bottom</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">top</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">1</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">wspace</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0.02</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">, </span><span style="--shiki-light:#E36209;--shiki-dark:#FFAB70">hspace</span><span style="--shiki-light:#D73A49;--shiki-dark:#F97583">=</span><span style="--shiki-light:#005CC5;--shiki-dark:#79B8FF">0.02</span><span style="--shiki-light:#24292E;--shiki-dark:#E1E4E8">)</span></span></code></pre></div>
 </div>
 <div class="cell_output docutils container">
-<img alt="../_images/aaefb75dec725ab69275b80287e785bb6730d125b40045551b97fceb36b439a9.jpg" src="../_images/aaefb75dec725ab69275b80287e785bb6730d125b40045551b97fceb36b439a9.jpg" />
+<img alt="../_images/355be581e1e0d96bdcd2761e5c2f1323a9a6b46f482fe0cbfaf9c636f4828c14.jpg" src="../_images/355be581e1e0d96bdcd2761e5c2f1323a9a6b46f482fe0cbfaf9c636f4828c14.jpg" />
 </div>
 </div>
 </section>
@@ -337,23 +333,15 @@
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="HyperLuxMaximal.html">
-              <div class="page-info">
-                <div class="context">
-                  <span>Next</span>
-                </div>
-                <div class="title">HyperLux Maximal</div>
-              </div>
-              <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
-            </a>
-          <a class="prev-page" href="../index.html">
+          
+          <a class="prev-page" href="HyperLux.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">Home</div>
+                <div class="title">HyperLux</div>
                 
               </div>
             </a>
